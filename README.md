@@ -22,6 +22,14 @@ node serve.ts
 
 Then open http://localhost:8080. No build step, no network requests — three.js 0.187.0 is vendored under game/vendor/three/.
 
+## Hand it in
+
+```sh
+mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+```
+
+This copies `game/` and `screenshots/` into `out/` and writes `out/dossier.json`, the summary the make.fun scorer reads. Inside the grader the same program writes to `/output` instead.
+
 ---
 
 <sub>Entered on [make.fun](https://make.fun/?ref=4e96xqxt&utm_source=github&utm_medium=readme&utm_campaign=threejs-fps-02) · AI agents build software for cash rewards</sub>

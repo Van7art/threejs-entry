@@ -1,32 +1,62 @@
-// A working threejs-fps-02 entry (Node 22, standard library only): the game is this directory's
-// game/ folder, plain static files the browser loads as ES modules with three.js from an import
-// map, and the program hands it in. It copies game/ and screenshots/ from beside this file to
-// /output and writes /output/dossier.json, the summary the judge reads, with the vendored make.fun
-// library. A starting point, not a winner: a grey room, one rifle and four targets that drop when
-// shot. Build your game, put your PNG or JPEG screenshots in screenshots/ (the first by name is
-// the cover) and run it.
+// Kestrel Yard — the handover program for make.fun's threejs-fps-02.
+// Node 22, standard library only, no build step: run it with `node main.ts`.
 //
-// Serve it locally with `node serve.ts`, then open http://localhost:8080.
-// Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
+// What it does, in three steps:
+//   1. copies the playable game (game/) beside this file into the output
+//      directory, so the grader receives exactly the files the browser loads;
+//   2. copies screenshots/ the same way (the first image by name is the cover);
+//   3. writes dossier.json, the judge's summary of the game, using the
+//      vendored make.fun library — the same library the scorer re-runs, so
+//      the dossier on disk must match what buildDossier computes.
+//
+// The output directory is /output inside the grader's container. Anywhere
+// else, set MAKEFUN_OUTPUT_DIR to a folder of your choice:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+// To play the game instead, serve it locally: `node serve.ts`.
 
 import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-threejs.ts';
 
-const here = fileURLToPath(new URL('.', import.meta.url));
-const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+// The folder this file lives in — game/ and screenshots/ sit beside it.
+const entryDir = fileURLToPath(new URL('.', import.meta.url));
 
-mkdirSync(out, { recursive: true });
-cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });
-mkdirSync(join(out, 'screenshots'), { recursive: true });
-if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
+// Where the finished handover goes: the grader's /output, or a folder
+// chosen through the environment when running the entry by hand.
+const outputDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
-// The scorer's own caps (reference/gate.json): only text_max_bytes shapes the bytes; the others refuse an entry the
-// scorer would refuse (more than 4 screenshots or one over 256 KiB; more than 993 files in game/ or 48 MiB of game
-// files, in all: game/ counts beside /output's own 1000-entry cap, its screenshots/ and dossier.json).
-writeFileSync(
-  join(out, 'dossier.json'),
-  buildDossier(out, { text_max_bytes: 163840, screenshots: { max: 4, max_bytes: 262144 }, game_max_files: 993, game_max_bytes: 50331648 }),
-);
+// The caps the scorer's gate.json hands buildDossier. Only text_max_bytes
+// changes the dossier's bytes; the rest refuse an entry the scorer would
+// refuse anyway — more than 4 screenshots, one over 256 KiB, more than 993
+// files in game/ or 48 MiB of game files in all (game/ shares the platform's
+// 1000-entry /output cap with screenshots/ and dossier.json itself).
+const DOSSIER_CAPS = {
+  text_max_bytes: 163840,
+  screenshots: { max: 4, max_bytes: 262144 },
+  game_max_files: 993,
+  game_max_bytes: 50331648,
+} as const;
+
+/** Copy a directory tree when it exists; the game's folder always does, the screenshots folder may not yet. */
+function copyTreeIfPresent(source: string, target: string): void {
+  if (!existsSync(source)) return;
+  cpSync(source, target, { recursive: true });
+}
+
+// Stage the output directory first, then lay the game and its screenshots
+// into it, and finally write the dossier that describes them. Fail early
+// with a plain message when the game folder itself is missing, instead of
+// letting the dossier builder report a bare directory error later.
+const gameDir = join(entryDir, 'game');
+if (!existsSync(gameDir)) {
+  throw new Error(`Kestrel Yard: no game/ beside main.ts (looked in ${entryDir})`);
+}
+mkdirSync(outputDir, { recursive: true });
+copyTreeIfPresent(gameDir, join(outputDir, 'game'));
+mkdirSync(join(outputDir, 'screenshots'), { recursive: true });
+copyTreeIfPresent(join(entryDir, 'screenshots'), join(outputDir, 'screenshots'));
+
+writeFileSync(join(outputDir, 'dossier.json'), buildDossier(outputDir, DOSSIER_CAPS));
+
+console.log(`Kestrel Yard handed in to ${outputDir}`);
